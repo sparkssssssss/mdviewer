@@ -35,13 +35,16 @@ For the `self-contained` package, .NET Runtime is bundled, but WebView2 Runtime 
 
 This repository is configured to build packages with GitHub Actions.
 
-- Push to `main`/`master` or run the workflow manually to get build artifacts.
-- Push a tag like `v0.1.0` to create a GitHub Release automatically.
+The workflow is manual only. It will not run automatically on push, pull request, or tag creation.
 
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
+To build packages:
+
+1. Open the repository on GitHub.
+2. Go to **Actions**.
+3. Select **Build Windows**.
+4. Click **Run workflow**.
+
+If you want to upload build artifacts to a GitHub Release, create/select the release tag first, run the workflow on that tag, and enable the `upload_release` option.
 
 Generated packages:
 
