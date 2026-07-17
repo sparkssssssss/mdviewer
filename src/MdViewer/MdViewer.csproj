@@ -11,6 +11,7 @@
     <Company>MdViewer</Company>
     <Product>MdViewer</Product>
     <Description>Lightweight Markdown viewer for Windows with Mermaid and KaTeX support.</Description>
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
