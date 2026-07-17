@@ -18,6 +18,7 @@ public sealed class MainForm : Form
         Width = 1100;
         Height = 760;
         MinimumSize = new Size(720, 480);
+        WindowState = FormWindowState.Maximized;
         AllowDrop = true;
         _currentFile = NormalizeFilePath(initialFile);
 

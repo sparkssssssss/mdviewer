@@ -133,18 +133,21 @@
     }
 
     async function ensureMermaid() {
-      if (window.mermaid) {
-        return;
+      if (!window.mermaid) {
+        mermaidLoadPromise ||= loadScript('vendor/mermaid/mermaid.min.js');
+        await mermaidLoadPromise;
       }
 
-      mermaidLoadPromise ||= loadScript('vendor/mermaid/mermaid.min.js').then(() => {
-        window.mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: 'strict',
-          theme: dark ? 'dark' : 'default'
-        });
+      const api = getMermaidApi();
+      if (!api) {
+        throw new Error('Mermaid loaded but no compatible API was found');
+      }
+
+      api.initialize?.({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        theme: dark ? 'dark' : 'default'
       });
-      await mermaidLoadPromise;
     }
 
     async function ensureKatex() {
@@ -197,9 +200,7 @@
         }
 
         try {
-          const result = await renderMermaidSource(source, index);
-          diagram.innerHTML = result.svg;
-          result.bindFunctions?.(diagram);
+          await renderMermaidElement(diagram, source, index);
         } catch (error) {
           diagram.classList.add('mermaid-error');
           diagram.innerHTML = `<strong>Mermaid 渲染失败</strong><pre>${escapeHtml(error && error.message ? error.message : error)}</pre>`;
@@ -207,17 +208,50 @@
       }
     }
 
-    async function renderMermaidSource(source, index) {
+    function getMermaidApi() {
+      const mermaid = window.mermaid;
+      return mermaid?.render || mermaid?.run || mermaid?.initialize
+        ? mermaid
+        : mermaid?.default || null;
+    }
+
+    async function renderMermaidElement(element, source, index) {
+      const api = getMermaidApi();
       const id = `mermaid-${Date.now()}-${index}`;
       try {
-        return await window.mermaid.render(id, source);
+        await renderMermaidWithApi(api, element, id, source);
       } catch (error) {
         const normalized = normalizeMermaidSource(source);
         if (normalized === source) {
           throw error;
         }
-        return await window.mermaid.render(`${id}-compat`, normalized);
+        await renderMermaidWithApi(api, element, `${id}-compat`, normalized);
       }
+    }
+
+    async function renderMermaidWithApi(api, element, id, source) {
+      if (typeof api?.render === 'function') {
+        const result = await api.render(id, source);
+        element.innerHTML = result.svg || result;
+        result.bindFunctions?.(element);
+        return;
+      }
+
+      if (typeof api?.mermaidAPI?.render === 'function') {
+        const result = await api.mermaidAPI.render(id, source);
+        element.innerHTML = result.svg || result;
+        result.bindFunctions?.(element);
+        return;
+      }
+
+      if (typeof api?.run === 'function') {
+        element.removeAttribute('data-processed');
+        element.textContent = source;
+        await api.run({ nodes: [element] });
+        return;
+      }
+
+      throw new Error('Mermaid render API is unavailable');
     }
 
     function normalizeMermaidSource(source) {
