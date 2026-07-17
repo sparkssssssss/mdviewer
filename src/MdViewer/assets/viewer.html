@@ -5,8 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MdViewer</title>
   <link rel="stylesheet" href="viewer.css">
-  <link rel="stylesheet" href="vendor/highlight/github.min.css" id="hl-light">
-  <link rel="stylesheet" href="vendor/highlight/github-dark.min.css" id="hl-dark" disabled>
 </head>
 <body>
   <div class="shell">
@@ -22,30 +20,24 @@
 
   <script src="vendor/markdown-it/markdown-it.min.js"></script>
   <script src="vendor/markdown-it-anchor/markdown-it-anchor.min.js"></script>
-  <script src="vendor/highlight/highlight.min.js"></script>
   <script>
     const app = document.getElementById('app');
     const toc = document.getElementById('toc');
     const editSourceButton = document.getElementById('edit-source');
-    const lightHighlight = document.getElementById('hl-light');
-    const darkHighlight = document.getElementById('hl-dark');
     let currentBasePath = null;
     let headingObserver = null;
     let dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     let mermaidLoadPromise = null;
     let katexLoadPromise = null;
+    let highlightLoadPromise = null;
 
     const md = window.markdownit({
       html: false,
       linkify: true,
       typographer: true,
       highlight(code, lang) {
-        if (lang && window.hljs && hljs.getLanguage(lang)) {
-          try {
-            return `<pre><code class="hljs language-${escapeHtml(lang)}">${hljs.highlight(code, { language: lang, ignoreIllegals: true }).value}</code></pre>`;
-          } catch {}
-        }
-        return `<pre><code class="hljs">${escapeHtml(code)}</code></pre>`;
+        const language = lang ? ` language-${escapeHtml(lang)}` : '';
+        return `<pre><code class="hljs${language}">${escapeHtml(code)}</code></pre>`;
       }
     }).use(window.markdownItAnchor || function () {});
 
@@ -77,8 +69,9 @@
 
     function applyTheme() {
       document.documentElement.classList.toggle('dark', dark);
-      lightHighlight.disabled = dark;
-      darkHighlight.disabled = !dark;
+      document.querySelectorAll('link[data-highlight-theme]').forEach(link => {
+        link.disabled = link.dataset.theme === 'dark' ? !dark : dark;
+      });
     }
 
     function escapeHtml(value) {
@@ -91,7 +84,16 @@
     }
 
     function resolveLocalUrl(url) {
-      if (!url || /^(https?:|data:|file:|mailto:|#)/i.test(url) || !currentBasePath) {
+      if (!url || /^(https?:|data:|file:|mailto:|#)/i.test(url)) {
+        return url;
+      }
+
+      const fileBaseUrl = window.mdviewerFileBaseUrl || null;
+      if (fileBaseUrl) {
+        return fileBaseUrl + encodeURI(url).replaceAll('%5C', '/');
+      }
+
+      if (!currentBasePath) {
         return url;
       }
       return 'https://mdviewer-files.local/' + encodeURI(url).replaceAll('%5C', '/');
@@ -113,7 +115,7 @@
       });
     }
 
-    function loadStyle(href) {
+    function loadStyle(href, options = {}) {
       if (document.querySelector(`link[href="${href}"]`)) {
         return;
       }
@@ -121,6 +123,13 @@
       const link = document.createElement('link');
       link.rel = 'stylesheet';
       link.href = href;
+      if (options.highlightTheme) {
+        link.dataset.highlightTheme = 'true';
+        link.dataset.theme = options.theme;
+      }
+      if (typeof options.disabled === 'boolean') {
+        link.disabled = options.disabled;
+      }
       document.head.appendChild(link);
     }
 
@@ -130,6 +139,25 @@
 
     function hasMath(source) {
       return /(^|[^\\])\$\$[\s\S]+?\$\$|(^|[^\\])\$[^\n$]+?\$|\\\(|\\\[/m.test(source);
+    }
+
+    function hasCodeFence(source) {
+      return /(^|\n)```/.test(source);
+    }
+
+    async function ensureHighlight() {
+      if (window.hljs) {
+        return;
+      }
+
+      loadHighlightThemes();
+      highlightLoadPromise ||= loadScript('vendor/highlight/highlight.min.js');
+      await highlightLoadPromise;
+    }
+
+    function loadHighlightThemes() {
+      loadStyle('vendor/highlight/github.min.css', { highlightTheme: true, theme: 'light', disabled: dark });
+      loadStyle('vendor/highlight/github-dark.min.css', { highlightTheme: true, theme: 'dark', disabled: !dark });
     }
 
     async function ensureMermaid() {
@@ -163,10 +191,15 @@
 
     async function render(payload) {
       currentBasePath = payload.basePath || payload.BasePath || null;
+      window.mdviewerFileBaseUrl = payload.fileBaseUrl || payload.FileBaseUrl || null;
       const source = payload.markdown || payload.Markdown || '';
       try {
         app.innerHTML = md.render(source);
         buildToc();
+
+        if (hasCodeFence(source)) {
+          requestAnimationFrame(() => highlightCodeBlocks());
+        }
 
         if (hasMath(source)) {
           await ensureKatex();
@@ -187,6 +220,15 @@
       } catch (error) {
         app.innerHTML = `<div class="error-box"><strong>Render failed</strong><pre>${escapeHtml(error && error.message ? error.message : error)}</pre></div>`;
         buildToc();
+      }
+    }
+
+    async function highlightCodeBlocks() {
+      try {
+        await ensureHighlight();
+        app.querySelectorAll('pre code').forEach(block => window.hljs.highlightElement(block));
+      } catch {
+        // Code highlighting is progressive enhancement; plain code blocks remain readable.
       }
     }
 
@@ -311,7 +353,11 @@
     }
 
     function editSource() {
-      window.chrome?.webview?.postMessage('edit-source');
+      if (window.chrome?.webview) {
+        window.chrome.webview.postMessage('edit-source');
+      } else if (window.editSource) {
+        window.editSource();
+      }
     }
 
     editSourceButton.addEventListener('click', editSource);
@@ -332,7 +378,11 @@
     };
 
     applyTheme();
-    window.chrome?.webview?.postMessage('viewer-ready');
+    if (window.chrome?.webview) {
+      window.chrome.webview.postMessage('viewer-ready');
+    } else if (window.viewerReady) {
+      window.viewerReady();
+    }
   </script>
 </body>
 </html>
