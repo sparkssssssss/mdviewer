@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MdViewer</title>
   <link rel="stylesheet" href="viewer.css">
-  <link rel="stylesheet" href="vendor/katex/katex.min.css">
   <link rel="stylesheet" href="vendor/highlight/github.min.css" id="hl-light">
   <link rel="stylesheet" href="vendor/highlight/github-dark.min.css" id="hl-dark" disabled>
 </head>
@@ -24,9 +23,6 @@
   <script src="vendor/markdown-it/markdown-it.min.js"></script>
   <script src="vendor/markdown-it-anchor/markdown-it-anchor.min.js"></script>
   <script src="vendor/highlight/highlight.min.js"></script>
-  <script src="vendor/katex/katex.min.js"></script>
-  <script src="vendor/katex/auto-render.min.js"></script>
-  <script src="vendor/mermaid/mermaid.min.js"></script>
   <script>
     const app = document.getElementById('app');
     const toc = document.getElementById('toc');
@@ -36,6 +32,8 @@
     let currentBasePath = null;
     let headingObserver = null;
     let dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    let mermaidLoadPromise = null;
+    let katexLoadPromise = null;
 
     const md = window.markdownit({
       html: false,
@@ -77,12 +75,6 @@
       return defaultImage(tokens, idx, options, env, self);
     };
 
-    mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: 'strict',
-      theme: dark ? 'dark' : 'default'
-    });
-
     function applyTheme() {
       document.documentElement.classList.toggle('dark', dark);
       lightHighlight.disabled = dark;
@@ -105,25 +97,114 @@
       return 'https://mdviewer-files.local/' + encodeURI(url).replaceAll('%5C', '/');
     }
 
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const existing = document.querySelector(`script[src="${src}"]`);
+        if (existing) {
+          resolve();
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error(`Failed to load ${src}`));
+        document.head.appendChild(script);
+      });
+    }
+
+    function loadStyle(href) {
+      if (document.querySelector(`link[href="${href}"]`)) {
+        return;
+      }
+
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = href;
+      document.head.appendChild(link);
+    }
+
+    function hasMermaid(source) {
+      return /(^|\n)```\s*mermaid\b/i.test(source);
+    }
+
+    function hasMath(source) {
+      return /(^|[^\\])\$\$[\s\S]+?\$\$|(^|[^\\])\$[^\n$]+?\$|\\\(|\\\[/m.test(source);
+    }
+
+    async function ensureMermaid() {
+      if (window.mermaid) {
+        return;
+      }
+
+      mermaidLoadPromise ||= loadScript('vendor/mermaid/mermaid.min.js').then(() => {
+        window.mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: 'strict',
+          theme: dark ? 'dark' : 'default'
+        });
+      });
+      await mermaidLoadPromise;
+    }
+
+    async function ensureKatex() {
+      if (window.renderMathInElement) {
+        return;
+      }
+
+      loadStyle('vendor/katex/katex.min.css');
+      katexLoadPromise ||= loadScript('vendor/katex/katex.min.js')
+        .then(() => loadScript('vendor/katex/auto-render.min.js'));
+      await katexLoadPromise;
+    }
+
     async function render(payload) {
       currentBasePath = payload.basePath || payload.BasePath || null;
       const source = payload.markdown || payload.Markdown || '';
       try {
         app.innerHTML = md.render(source);
         buildToc();
-        renderMathInElement(app, {
-          delimiters: [
-            { left: '$$', right: '$$', display: true },
-            { left: '$', right: '$', display: false },
-            { left: '\\(', right: '\\)', display: false },
-            { left: '\\[', right: '\\]', display: true }
-          ],
-          throwOnError: false
-        });
-        await mermaid.run({ querySelector: '.mermaid' });
+
+        if (hasMath(source)) {
+          await ensureKatex();
+          window.renderMathInElement?.(app, {
+            delimiters: [
+              { left: '$$', right: '$$', display: true },
+              { left: '$', right: '$', display: false },
+              { left: '\\(', right: '\\)', display: false },
+              { left: '\\[', right: '\\]', display: true }
+            ],
+            throwOnError: false
+          });
+        }
+
+        if (hasMermaid(source)) {
+          await renderMermaidDiagrams();
+        }
       } catch (error) {
         app.innerHTML = `<div class="error-box"><strong>Render failed</strong><pre>${escapeHtml(error && error.message ? error.message : error)}</pre></div>`;
         buildToc();
+      }
+    }
+
+    async function renderMermaidDiagrams() {
+      await ensureMermaid();
+      const diagrams = Array.from(app.querySelectorAll('.mermaid'));
+      for (const [index, diagram] of diagrams.entries()) {
+        const source = diagram.textContent || '';
+        if (!source.trim()) {
+          continue;
+        }
+
+        try {
+          const id = `mermaid-${Date.now()}-${index}`;
+          const result = await window.mermaid.render(id, source);
+          diagram.innerHTML = result.svg;
+          result.bindFunctions?.(diagram);
+        } catch (error) {
+          diagram.classList.add('mermaid-error');
+          diagram.innerHTML = `<strong>Mermaid 渲染失败</strong><pre>${escapeHtml(error && error.message ? error.message : error)}</pre>`;
+        }
       }
     }
 
@@ -190,7 +271,7 @@
       toggleTheme() {
         dark = !dark;
         applyTheme();
-        mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: dark ? 'dark' : 'default' });
+        window.mermaid?.initialize({ startOnLoad: false, securityLevel: 'strict', theme: dark ? 'dark' : 'default' });
       }
     };
 

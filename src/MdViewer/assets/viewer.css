@@ -174,6 +174,19 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 2em 0; }
   text-align: center;
 }
 
+.mermaid-error {
+  border-color: #ef4444;
+  background: #fef2f2;
+  color: #991b1b;
+  text-align: left;
+}
+
+.mermaid-error pre {
+  white-space: pre-wrap;
+}
+
+:root.dark .mermaid-error { background: #2a1111; color: #fecaca; }
+
 .error-box {
   border: 1px solid #ef4444;
   background: #fef2f2;

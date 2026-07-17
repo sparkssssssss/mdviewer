@@ -9,6 +9,7 @@ public sealed class MainForm : Form
     private readonly WebView2 _webView = new() { Dock = DockStyle.Fill };
     private readonly ToolStripStatusLabel _statusLabel = new() { Text = "Ready" };
     private string? _currentFile;
+    private string? _mappedBaseDir;
     private bool _viewerReady;
 
     public MainForm(string? initialFile)
@@ -136,7 +137,7 @@ public sealed class MainForm : Form
         {
             Text = "MdViewer";
             _statusLabel.Text = "Drop a Markdown file here or use File > Open";
-            await PostJsonAsync(new ViewerPayload(null, "# MdViewer\n\nOpen or drag a Markdown file to preview it.\n\n```mermaid\ngraph TD\n  A[Markdown] --> B[Mermaid]\n  A --> C[KaTeX]\n```\n\nInline math: $E = mc^2$", null));
+            await PostJsonAsync(new ViewerPayload(null, "# MdViewer\n\nOpen or drag a Markdown file here to preview it.\n\n- Supports local Markdown files\n- Supports document outline navigation\n- Use **Ctrl+E** or the bottom-right button to edit the source file", null));
             return;
         }
 
@@ -144,12 +145,14 @@ public sealed class MainForm : Form
         {
             var text = await File.ReadAllTextAsync(_currentFile);
             var baseDir = Path.GetDirectoryName(_currentFile);
-            if (!string.IsNullOrWhiteSpace(baseDir))
+            if (!string.IsNullOrWhiteSpace(baseDir) &&
+                !string.Equals(_mappedBaseDir, baseDir, StringComparison.OrdinalIgnoreCase))
             {
                 _webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
                     "mdviewer-files.local",
                     baseDir,
                     CoreWebView2HostResourceAccessKind.Allow);
+                _mappedBaseDir = baseDir;
             }
 
             Text = Path.GetFileName(_currentFile) + " - MdViewer";
