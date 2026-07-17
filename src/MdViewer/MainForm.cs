@@ -70,10 +70,15 @@ public sealed class MainForm : Form
 
             _webView.CoreWebView2.WebMessageReceived += async (_, e) =>
             {
-                if (e.TryGetWebMessageAsString() == "viewer-ready")
+                var message = e.TryGetWebMessageAsString();
+                if (message == "viewer-ready")
                 {
                     _viewerReady = true;
                     await RenderCurrentFileAsync();
+                }
+                else if (message == "edit-source")
+                {
+                    OpenCurrentFileForEdit();
                 }
             };
 
@@ -187,6 +192,46 @@ public sealed class MainForm : Form
         {
             return path;
         }
+    }
+
+    private void OpenCurrentFileForEdit()
+    {
+        if (string.IsNullOrWhiteSpace(_currentFile) || !File.Exists(_currentFile))
+        {
+            _statusLabel.Text = "No source file to edit";
+            return;
+        }
+
+        if (TryStartProcess("code.cmd", "--goto " + QuoteArgument(_currentFile + ":1:1")) ||
+            TryStartProcess("code", "--goto " + QuoteArgument(_currentFile + ":1:1")) ||
+            TryStartProcess("notepad.exe", QuoteArgument(_currentFile)))
+        {
+            _statusLabel.Text = "Editing " + _currentFile;
+            return;
+        }
+
+        TryOpenExternal(_currentFile);
+    }
+
+    private static bool TryStartProcess(string fileName, string arguments)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(fileName, arguments)
+            {
+                UseShellExecute = false
+            });
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string QuoteArgument(string value)
+    {
+        return "\"" + value.Replace("\"", "\\\"") + "\"";
     }
 
     private static void TryOpenExternal(string uri)
