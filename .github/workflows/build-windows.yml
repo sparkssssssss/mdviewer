@@ -23,12 +23,6 @@ jobs:
           - rid: win-x64
             self_contained: false
             suffix: framework-dependent
-          - rid: win-x64
-            self_contained: true
-            suffix: self-contained
-          - rid: win-arm64
-            self_contained: false
-            suffix: framework-dependent
 
     steps:
       - name: Checkout
@@ -49,14 +43,23 @@ jobs:
       - name: Publish
         shell: pwsh
         run: |
-          dotnet publish src/MdViewer/MdViewer.csproj `
-            -c Release `
-            -r ${{ matrix.rid }} `
-            --self-contained ${{ matrix.self_contained }} `
-            -p:PublishSingleFile=true `
-            -p:EnableCompressionInSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -o publish/${{ matrix.rid }}-${{ matrix.suffix }}
+          $publishArgs = @(
+            'publish', 'src/MdViewer/MdViewer.csproj',
+            '-c', 'Release',
+            '-r', '${{ matrix.rid }}',
+            '--self-contained', '${{ matrix.self_contained }}',
+            '-p:PublishSingleFile=true',
+            '-o', 'publish/${{ matrix.rid }}-${{ matrix.suffix }}'
+          )
+
+          if ('${{ matrix.self_contained }}' -eq 'true') {
+            $publishArgs += @(
+              '-p:EnableCompressionInSingleFile=true',
+              '-p:IncludeNativeLibrariesForSelfExtract=true'
+            )
+          }
+
+          dotnet @publishArgs
 
       - name: Copy README and LICENSE
         shell: pwsh
