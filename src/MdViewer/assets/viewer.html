@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MdViewer</title>
+  <link rel="stylesheet" href="viewer.css">
+  <link rel="stylesheet" href="vendor/katex/katex.min.css">
+  <link rel="stylesheet" href="vendor/highlight/github.min.css" id="hl-light">
+  <link rel="stylesheet" href="vendor/highlight/github-dark.min.css" id="hl-dark" disabled>
+</head>
+<body>
+  <main id="app" class="markdown-body"></main>
+
+  <script src="vendor/markdown-it/markdown-it.min.js"></script>
+  <script src="vendor/markdown-it-anchor/markdown-it-anchor.min.js"></script>
+  <script src="vendor/highlight/highlight.min.js"></script>
+  <script src="vendor/katex/katex.min.js"></script>
+  <script src="vendor/katex/auto-render.min.js"></script>
+  <script src="vendor/mermaid/mermaid.min.js"></script>
+  <script>
+    const app = document.getElementById('app');
+    const lightHighlight = document.getElementById('hl-light');
+    const darkHighlight = document.getElementById('hl-dark');
+    let currentBasePath = null;
+    let dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    const md = window.markdownit({
+      html: false,
+      linkify: true,
+      typographer: true,
+      highlight(code, lang) {
+        if (lang && window.hljs && hljs.getLanguage(lang)) {
+          try {
+            return `<pre><code class="hljs language-${escapeHtml(lang)}">${hljs.highlight(code, { language: lang, ignoreIllegals: true }).value}</code></pre>`;
+          } catch {}
+        }
+        return `<pre><code class="hljs">${escapeHtml(code)}</code></pre>`;
+      }
+    }).use(window.markdownItAnchor || function () {});
+
+    const defaultFence = md.renderer.rules.fence || function(tokens, idx, options, env, self) {
+      return self.renderToken(tokens, idx, options);
+    };
+
+    md.renderer.rules.fence = function(tokens, idx, options, env, self) {
+      const token = tokens[idx];
+      const info = token.info ? token.info.trim() : '';
+      if (info === 'mermaid') {
+        return `<div class="mermaid">${escapeHtml(token.content)}</div>`;
+      }
+      return defaultFence(tokens, idx, options, env, self);
+    };
+
+    const defaultImage = md.renderer.rules.image || function(tokens, idx, options, env, self) {
+      return self.renderToken(tokens, idx, options);
+    };
+
+    md.renderer.rules.image = function(tokens, idx, options, env, self) {
+      const token = tokens[idx];
+      const srcIndex = token.attrIndex('src');
+      if (srcIndex >= 0) {
+        token.attrs[srcIndex][1] = resolveLocalUrl(token.attrs[srcIndex][1]);
+      }
+      return defaultImage(tokens, idx, options, env, self);
+    };
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: dark ? 'dark' : 'default'
+    });
+
+    function applyTheme() {
+      document.documentElement.classList.toggle('dark', dark);
+      lightHighlight.disabled = dark;
+      darkHighlight.disabled = !dark;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function resolveLocalUrl(url) {
+      if (!url || /^(https?:|data:|file:|mailto:|#)/i.test(url) || !currentBasePath) {
+        return url;
+      }
+      return 'https://mdviewer-files.local/' + encodeURI(url).replaceAll('%5C', '/');
+    }
+
+    async function render(payload) {
+      currentBasePath = payload.basePath || payload.BasePath || null;
+      const source = payload.markdown || payload.Markdown || '';
+      try {
+        app.innerHTML = md.render(source);
+        renderMathInElement(app, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false },
+            { left: '\\[', right: '\\]', display: true }
+          ],
+          throwOnError: false
+        });
+        await mermaid.run({ querySelector: '.mermaid' });
+      } catch (error) {
+        app.innerHTML = `<div class="error-box"><strong>Render failed</strong><pre>${escapeHtml(error && error.message ? error.message : error)}</pre></div>`;
+      }
+    }
+
+    window.mdviewer = {
+      render,
+      toggleTheme() {
+        dark = !dark;
+        applyTheme();
+        mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: dark ? 'dark' : 'default' });
+      }
+    };
+
+    applyTheme();
+    window.chrome?.webview?.postMessage('viewer-ready');
+  </script>
+</body>
+</html>

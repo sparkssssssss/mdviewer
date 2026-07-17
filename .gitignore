@@ -1,0 +1,13 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+publish/
+dist/
+artifacts/
+node_modules/
+src/MdViewer/assets/vendor/
+*.zip
+*.nupkg
+mdviewer TO DO list.csv
