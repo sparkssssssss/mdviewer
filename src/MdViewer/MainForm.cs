@@ -78,6 +78,10 @@ public sealed class MainForm : Form
                     _viewerReady = true;
                     await RenderCurrentFileAsync();
                 }
+                else if (message == "open-file")
+                {
+                    await OpenFileAsync();
+                }
                 else if (message == "edit-source")
                 {
                     OpenCurrentFileForEdit();

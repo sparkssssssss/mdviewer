@@ -32,9 +32,17 @@ type appState struct {
 	server      *http.Server
 	baseURL     string
 	webview     webview.WebView
+	lastModTime time.Time
 }
 
 func main() {
+	if handled, err := handleCommandLineAction(); handled {
+		if err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	state, err := newAppState()
 	if err != nil {
 		log.Fatal(err)
@@ -51,16 +59,42 @@ func main() {
 	bind(w, "viewerReady", func() {
 		state.renderCurrentFile()
 	})
+	bind(w, "openMarkdownFile", func() {
+		state.openFileDialog()
+	})
 	bind(w, "editSource", func() {
 		state.openCurrentFileForEdit()
 	})
 	bind(w, "openFile", func(path string) {
-		state.currentFile = normalizePath(path)
+		state.setCurrentFile(path)
 		state.renderCurrentFile()
 	})
 
 	w.Navigate(state.baseURL + "/assets/viewer.html")
+	go state.watchCurrentFile()
 	w.Run()
+}
+
+func handleCommandLineAction() (bool, error) {
+	if len(os.Args) < 2 {
+		return false, nil
+	}
+
+	switch strings.ToLower(os.Args[1]) {
+	case "--associate":
+		return true, associateFileTypes()
+	case "--unassociate":
+		return true, unassociateFileTypes()
+	case "--help", "-h", "/?":
+		fmt.Println("MdViewer Go")
+		fmt.Println("Usage:")
+		fmt.Println("  MdViewerGo.exe <file.md>")
+		fmt.Println("  MdViewerGo.exe --associate")
+		fmt.Println("  MdViewerGo.exe --unassociate")
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 func newAppState() (*appState, error) {
@@ -87,7 +121,7 @@ func newAppState() (*appState, error) {
 
 	state := &appState{assetsDir: assetsDir}
 	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") {
-		state.currentFile = normalizePath(os.Args[1])
+		state.setCurrentFile(os.Args[1])
 	}
 	if err := state.startServer(); err != nil {
 		return nil, err
@@ -132,6 +166,35 @@ func (a *appState) handleLocalFile(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, requested)
 }
 
+func (a *appState) setCurrentFile(path string) {
+	a.currentFile = normalizePath(path)
+	a.lastModTime = fileModTime(a.currentFile)
+}
+
+func fileModTime(path string) time.Time {
+	info, err := os.Stat(path)
+	if err != nil {
+		return time.Time{}
+	}
+	return info.ModTime()
+}
+
+func (a *appState) watchCurrentFile() {
+	ticker := time.NewTicker(800 * time.Millisecond)
+	defer ticker.Stop()
+	for range ticker.C {
+		if a.currentFile == "" {
+			continue
+		}
+		modTime := fileModTime(a.currentFile)
+		if modTime.IsZero() || modTime.Equal(a.lastModTime) {
+			continue
+		}
+		a.lastModTime = modTime
+		a.renderCurrentFile()
+	}
+}
+
 func (a *appState) renderCurrentFile() {
 	if a.webview == nil {
 		return
@@ -172,11 +235,29 @@ func titleFor(title string) string {
 	return title + " - MdViewer Go"
 }
 
+func (a *appState) openFileDialog() {
+	path, err := chooseMarkdownFile()
+	if err != nil || strings.TrimSpace(path) == "" {
+		return
+	}
+	a.setCurrentFile(path)
+	a.renderCurrentFile()
+}
+
 func (a *appState) openCurrentFileForEdit() {
 	if a.currentFile == "" {
 		return
 	}
 	openWithEditor(a.currentFile)
+}
+
+func chooseMarkdownFile() (string, error) {
+	if runtime.GOOS == "windows" {
+		cmd := exec.Command("powershell", "-NoProfile", "-STA", "-Command", `Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.OpenFileDialog; $d.Filter = 'Markdown files (*.md;*.markdown;*.mdown)|*.md;*.markdown;*.mdown|Text files (*.txt)|*.txt|All files (*.*)|*.*'; $d.Title = 'Open Markdown file'; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Write($d.FileName) }`)
+		out, err := cmd.Output()
+		return string(out), err
+	}
+	return "", errors.New("open file dialog is only implemented on Windows")
 }
 
 func openWithEditor(path string) {
@@ -192,6 +273,57 @@ func openWithEditor(path string) {
 		return
 	}
 	_ = exec.Command("xdg-open", path).Start()
+}
+
+func associateFileTypes() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	exe = normalizePath(exe)
+	icon := filepath.Join(filepath.Dir(exe), "app.ico")
+	if _, err := os.Stat(icon); err != nil {
+		icon = exe + ",0"
+	} else {
+		icon = normalizePath(icon)
+	}
+	commands := []string{
+		`New-Item -Path 'HKCU:\Software\Classes\.md' -Force | Out-Null`,
+		`Set-ItemProperty -Path 'HKCU:\Software\Classes\.md' -Name '(default)' -Value 'MdViewerGo.md'`,
+		`New-Item -Path 'HKCU:\Software\Classes\.markdown' -Force | Out-Null`,
+		`Set-ItemProperty -Path 'HKCU:\Software\Classes\.markdown' -Name '(default)' -Value 'MdViewerGo.md'`,
+		`New-Item -Path 'HKCU:\Software\Classes\.mdown' -Force | Out-Null`,
+		`Set-ItemProperty -Path 'HKCU:\Software\Classes\.mdown' -Name '(default)' -Value 'MdViewerGo.md'`,
+		`New-Item -Path 'HKCU:\Software\Classes\MdViewerGo.md' -Force | Out-Null`,
+		`Set-ItemProperty -Path 'HKCU:\Software\Classes\MdViewerGo.md' -Name '(default)' -Value 'Markdown Document'`,
+		`New-Item -Path 'HKCU:\Software\Classes\MdViewerGo.md\DefaultIcon' -Force | Out-Null`,
+		fmt.Sprintf(`Set-ItemProperty -Path 'HKCU:\Software\Classes\MdViewerGo.md\DefaultIcon' -Name '(default)' -Value '%s'`, escapePowerShellSingleQuoted(icon)),
+		`New-Item -Path 'HKCU:\Software\Classes\MdViewerGo.md\shell\open\command' -Force | Out-Null`,
+		fmt.Sprintf(`Set-ItemProperty -Path 'HKCU:\Software\Classes\MdViewerGo.md\shell\open\command' -Name '(default)' -Value '"%s" "%%1"'`, escapePowerShellSingleQuoted(exe)),
+	}
+	return runPowerShell(strings.Join(commands, "; "))
+}
+
+func unassociateFileTypes() error {
+	commands := []string{
+		`Remove-Item -Path 'HKCU:\Software\Classes\.md' -Force -ErrorAction SilentlyContinue`,
+		`Remove-Item -Path 'HKCU:\Software\Classes\.markdown' -Force -ErrorAction SilentlyContinue`,
+		`Remove-Item -Path 'HKCU:\Software\Classes\.mdown' -Force -ErrorAction SilentlyContinue`,
+		`Remove-Item -Path 'HKCU:\Software\Classes\MdViewerGo.md' -Recurse -Force -ErrorAction SilentlyContinue`,
+	}
+	return runPowerShell(strings.Join(commands, "; "))
+}
+
+func runPowerShell(command string) error {
+	if runtime.GOOS != "windows" {
+		return errors.New("file association is only implemented on Windows")
+	}
+	cmd := exec.Command("powershell", "-NoProfile", "-Command", command)
+	return cmd.Run()
+}
+
+func escapePowerShellSingleQuoted(value string) string {
+	return strings.ReplaceAll(value, `'`, `''`)
 }
 
 func tryStart(name string, args ...string) bool {

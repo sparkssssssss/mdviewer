@@ -49,6 +49,7 @@ jobs:
           Copy-Item README.md publish/go-win-x64/README.md
           Copy-Item LICENSE publish/go-win-x64/LICENSE
           Copy-Item examples/sample.md publish/go-win-x64/sample.md
+          Copy-Item src/MdViewer/app.ico publish/go-win-x64/app.ico
           Copy-Item src/MdViewer.Go/README.md publish/go-win-x64/README-Go-MVP.md
 
       - name: Zip package

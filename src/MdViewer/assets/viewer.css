@@ -90,30 +90,44 @@ body {
   padding: 36px 42px 96px;
 }
 
+.open-file,
 .edit-source {
   position: fixed;
   right: 28px;
-  bottom: 28px;
   z-index: 20;
-  width: 52px;
-  height: 52px;
   border: 1px solid color-mix(in srgb, var(--accent), white 38%);
   border-radius: 999px;
   background: var(--accent);
   color: white;
   box-shadow: 0 12px 30px rgba(37, 99, 235, 0.32);
   cursor: pointer;
-  font-size: 1.35rem;
   line-height: 1;
   transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
 }
 
+.open-file {
+  bottom: 92px;
+  height: 42px;
+  padding: 0 18px;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.edit-source {
+  bottom: 28px;
+  width: 52px;
+  height: 52px;
+  font-size: 1.35rem;
+}
+
+.open-file:hover,
 .edit-source:hover {
   filter: brightness(1.05);
   transform: translateY(-2px);
   box-shadow: 0 16px 36px rgba(37, 99, 235, 0.38);
 }
 
+.open-file:active,
 .edit-source:active { transform: translateY(0) scale(0.97); }
 
 .markdown-body { overflow-wrap: break-word; }
@@ -207,11 +221,13 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 2em 0; }
     border-bottom: 1px solid var(--border);
   }
   #app { padding: 28px 22px 92px; }
+  .open-file { right: 18px; bottom: 82px; }
   .edit-source { right: 18px; bottom: 18px; }
 }
 
 @media print {
   .toc-panel,
+  .open-file,
   .edit-source { display: none; }
   .shell { display: block; }
   #app { width: auto; max-width: none; padding: 0; }
