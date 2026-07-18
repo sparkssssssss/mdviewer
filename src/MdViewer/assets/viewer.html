@@ -305,7 +305,12 @@
         return source;
       }
 
-      return source.replace(/(^|[^\w])([A-Za-z_][\w-]*)\[([^\]\n"]*?[():][^\]\n"]*?)\]/g, (_, prefix, id, label) => {
+      // Mermaid 10/11 is stricter than older releases for flowchart labels.
+      // Labels such as `B[Render with markdown-it]` or `E[highlight.js code]`
+      // can be parsed as expressions/operators in some versions. Quote plain
+      // bracket labels before the compatibility retry so common Markdown samples
+      // render instead of showing a Mermaid parse error.
+      return source.replace(/(^|[^\w])([A-Za-z_][\w-]*)\[([^\]\n"]+)\]/g, (_, prefix, id, label) => {
         return `${prefix}${id}["${label.replaceAll('"', '\\"')}"]`;
       });
     }
