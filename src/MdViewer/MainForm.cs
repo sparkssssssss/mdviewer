@@ -15,6 +15,7 @@ public sealed class MainForm : Form
     public MainForm(string? initialFile)
     {
         Text = "MdViewer";
+        Icon = LoadWindowIcon();
         Width = 1100;
         Height = 760;
         MinimumSize = new Size(720, 480);
@@ -182,6 +183,18 @@ public sealed class MainForm : Form
         if (_webView.CoreWebView2 is not null)
         {
             await _webView.ExecuteScriptAsync(script);
+        }
+    }
+
+    private static Icon? LoadWindowIcon()
+    {
+        try
+        {
+            return Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+        }
+        catch
+        {
+            return null;
         }
     }
 
