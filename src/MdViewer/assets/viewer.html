@@ -199,6 +199,7 @@
       const source = payload.markdown || payload.Markdown || '';
       try {
         app.innerHTML = md.render(source);
+        enhanceCodeBlocks();
         buildToc();
 
         if (hasCodeFence(source)) {
@@ -224,6 +225,58 @@
       } catch (error) {
         app.innerHTML = `<div class="error-box"><strong>Render failed</strong><pre>${escapeHtml(error && error.message ? error.message : error)}</pre></div>`;
         buildToc();
+      }
+    }
+
+    function enhanceCodeBlocks() {
+      app.querySelectorAll('pre').forEach(pre => {
+        const code = pre.querySelector('code');
+        if (!code || pre.querySelector('.copy-code')) {
+          return;
+        }
+
+        pre.classList.add('code-block');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'copy-code';
+        button.textContent = '复制';
+        button.setAttribute('aria-label', '复制代码');
+        button.addEventListener('click', async () => {
+          const ok = await copyText(code.textContent || '');
+          button.textContent = ok ? '已复制' : '复制失败';
+          button.classList.toggle('copied', ok);
+          window.setTimeout(() => {
+            button.textContent = '复制';
+            button.classList.remove('copied');
+          }, 1400);
+        });
+        pre.appendChild(button);
+      });
+    }
+
+    async function copyText(text) {
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+      } catch {
+        // Fall back to the hidden textarea path below.
+      }
+
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const ok = document.execCommand('copy');
+        textarea.remove();
+        return ok;
+      } catch {
+        return false;
       }
     }
 
