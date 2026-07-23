@@ -14,7 +14,7 @@ Implemented in the Rust shell:
 - WebView2 hosting through `webview2-com`
 - Shared frontend asset loading via WebView2 virtual host mapping
 - Command-line Markdown opening: `MdViewerRust.exe README.md`
-- In-window **Open** button
+- File menu **Open...** action
 - File menu: Open, Reload, Exit
 - View menu: Toggle Theme, Zoom In, Zoom Out, Reset Zoom
 - Markdown rendering through the existing `viewer.html`
@@ -27,7 +27,7 @@ Implemented in the Rust shell:
 
 Still experimental / needs Windows runtime testing:
 
-- Polish around installer packaging and icon behavior
+- Polish around installer packaging
 - More exhaustive parity testing against the .NET version
 
 ## Build on Windows
