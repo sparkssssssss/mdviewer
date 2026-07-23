@@ -47,7 +47,7 @@ jobs:
           $out = 'publish/rust-win-x64'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-          Copy-Item src/MdViewer.Rust/target/release/mdviewer-rust.exe "$out/MdViewerRust.exe"
+          Copy-Item target/release/mdviewer-rust.exe "$out/MdViewerRust.exe"
           Copy-Item src/MdViewer.Rust/README.md "$out/README.Rust.md"
           Copy-Item README.md "$out/README.md"
           Copy-Item LICENSE "$out/LICENSE"

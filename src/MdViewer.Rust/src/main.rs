@@ -1,5 +1,10 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
+mod platform;
+
 fn main() {
-    println!("MdViewer Rust skeleton");
-    println!("This crate is reserved for a future Rust native shell.");
-    println!("It will eventually reuse the existing MdViewer frontend assets and mirror the .NET feature set.");
+    let args: Vec<String> = std::env::args().collect();
+    if let Err(error) = platform::run(&args) {
+        platform::show_error("MdViewer Rust", &error.to_string());
+    }
 }
