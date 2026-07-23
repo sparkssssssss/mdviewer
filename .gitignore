@@ -7,6 +7,8 @@ publish/
 dist/
 artifacts/
 node_modules/
+target/
+src/MdViewer.Rust/target/
 src/MdViewer/assets/vendor/
 *.zip
 *.nupkg

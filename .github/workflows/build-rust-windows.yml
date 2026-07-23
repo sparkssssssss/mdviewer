@@ -1,0 +1,71 @@
+name: Build Rust Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload_release:
+        description: 'Upload build artifact to an existing GitHub Release for the selected ref/tag'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Show Rust versions
+        shell: pwsh
+        run: |
+          rustc --version
+          cargo --version
+
+      - name: Generate lockfile
+        shell: pwsh
+        run: cargo generate-lockfile --manifest-path src/MdViewer.Rust/Cargo.toml
+
+      - name: Build Rust shell
+        shell: pwsh
+        run: cargo build --manifest-path src/MdViewer.Rust/Cargo.toml --release --locked
+
+      - name: Fetch web assets
+        shell: pwsh
+        run: ./scripts/fetch-assets.ps1
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $out = 'publish/rust-win-x64'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+          Copy-Item src/MdViewer.Rust/target/release/mdviewer-rust.exe "$out/MdViewerRust.exe"
+          Copy-Item src/MdViewer.Rust/README.md "$out/README.Rust.md"
+          Copy-Item README.md "$out/README.md"
+          Copy-Item LICENSE "$out/LICENSE"
+          Copy-Item examples/sample.md "$out/sample.md"
+          Copy-Item src/MdViewer/app.ico "$out/app.ico"
+          Copy-Item -Recurse src/MdViewer/assets "$out/assets"
+
+          $name = 'MdViewer-rust-win-x64'
+          Compress-Archive -Path "$out/*" -DestinationPath "$name.zip" -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MdViewer-rust-win-x64
+          path: MdViewer-rust-win-x64.zip
+
+      - name: Upload release asset
+        if: inputs.upload_release == true
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MdViewer-rust-win-x64.zip

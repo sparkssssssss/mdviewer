@@ -1,0 +1,11 @@
+[package]
+name = "mdviewer-rust"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.78"
+
+[package.metadata]
+description = "Experimental Rust native shell for MdViewer"
+
+[dependencies]
+# Skeleton only for now. Add WebView2 / windows bindings when the native shell is implemented.

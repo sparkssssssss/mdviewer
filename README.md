@@ -5,6 +5,7 @@ MdViewer is a lightweight Markdown viewer for Windows. It focuses on reading loc
 ## Features
 
 - Windows desktop app based on WinForms + WebView2
+- Experimental Rust native shell skeleton for future performance work
 - Markdown rendering via `markdown-it`
 - Mermaid diagram rendering
 - KaTeX math formulas
@@ -52,13 +53,22 @@ Generated packages:
 - `MdViewer-win-x64-self-contained.zip` - larger, includes .NET runtime
 - `MdViewer-win-arm64-framework-dependent.zip` - for Windows on ARM64
 
+The experimental Rust skeleton has a separate manual workflow: **Build Rust Windows**. It produces `MdViewer-rust-win-x64.zip` and keeps the .NET workflow unchanged.
+
 ## Local development
 
-Install:
+Current primary app:
 
 - .NET 8 SDK
 - WebView2 Runtime
 - PowerShell 7 or Windows PowerShell
+
+Experimental Rust skeleton:
+
+- Rust toolchain
+- Windows 10/11
+- WebView2 Runtime
+
 
 Fetch local web assets:
 
@@ -99,6 +109,11 @@ dotnet publish src/MdViewer/MdViewer.csproj -c Release -r win-x64 --self-contain
 │     ├─ viewer.html
 │     ├─ viewer.css
 │     └─ vendor/          # downloaded by scripts/fetch-assets.ps1
+├─ src/MdViewer.Rust/
+│  ├─ Cargo.toml
+│  ├─ README.md
+│  └─ src/
+│     └─ main.rs
 ├─ MdViewer.sln
 ├─ LICENSE
 └─ README.md
