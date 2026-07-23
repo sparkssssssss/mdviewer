@@ -165,6 +165,12 @@ impl FrameWindow {
                 if let Ok(hwnd) = hwnd {
                     let _ = install_menu(hwnd);
                     Shell::DragAcceptFiles(hwnd, true);
+                    let _ = WindowsAndMessaging::ShowWindow(
+                        hwnd,
+                        WindowsAndMessaging::SW_SHOWMAXIMIZED,
+                    );
+                    let _ = Gdi::UpdateWindow(hwnd);
+                    let _ = KeyboardAndMouse::SetFocus(Some(hwnd));
                 }
                 hwnd
             }
@@ -229,7 +235,8 @@ impl AppState {
     fn run(self) -> AppResult<()> {
         APP_STATE.with(|slot| *slot.borrow_mut() = Some(self.clone()));
 
-        let webview = WebView::create(None, false)?;
+        let frame = FrameWindow::new();
+        let webview = WebView::create_on_frame(frame, false)?;
         *self.webview.borrow_mut() = Some(webview.clone());
 
         let app = self.clone();
@@ -299,10 +306,7 @@ impl AppState {
 
         webview.map_folder("mdviewer.local", &self.assets_dir)?;
         let viewer_url = "https://mdviewer.local/viewer.html";
-        webview
-            .set_title("MdViewer Rust")?
-            .set_size(1100, 760)?
-            .navigate(viewer_url)?;
+        webview.set_title("MdViewer Rust")?.navigate(viewer_url)?;
 
         if self.current_file.borrow().is_some() {
             // render will happen once viewer-ready arrives
@@ -417,15 +421,15 @@ impl AppState {
 }
 
 impl WebView {
-    pub fn create(parent: Option<HWND>, debug: bool) -> AppResult<Self> {
-        let (parent, frame) = match parent {
-            Some(hwnd) => (hwnd, None),
-            None => {
-                let frame = FrameWindow::new();
-                (*frame.window, Some(frame))
-            }
-        };
+    fn create_on_frame(frame: FrameWindow, debug: bool) -> AppResult<Self> {
+        Self::create_with_parent(*frame.window, Some(frame), debug)
+    }
 
+    fn create_with_parent(
+        parent: HWND,
+        frame: Option<FrameWindow>,
+        debug: bool,
+    ) -> AppResult<Self> {
         let environment = {
             let (tx, rx) = mpsc::channel();
             CreateCoreWebView2EnvironmentCompletedHandler::wait_for_async_operation(
@@ -440,8 +444,7 @@ impl WebView {
                     Ok(())
                 }),
             )?;
-            rx.recv()
-                .map_err(|_| Error::WebView2Error(webview2_com::Error::SendError))??
+            webview2_com::wait_with_pump(rx)??
         };
 
         let controller = {
@@ -459,8 +462,7 @@ impl WebView {
                     Ok(())
                 }),
             )?;
-            rx.recv()
-                .map_err(|_| Error::WebView2Error(webview2_com::Error::SendError))??
+            webview2_com::wait_with_pump(rx)??
         };
 
         let size = get_window_size(parent);
@@ -504,29 +506,17 @@ impl WebView {
     pub fn run(self) -> AppResult<()> {
         let webview = self.webview.as_ref();
         let url = self.url.borrow().clone();
-        let (tx, rx) = mpsc::channel();
 
         if !url.is_empty() {
-            let handler =
-                NavigationCompletedEventHandler::create(Box::new(move |_sender, _args| {
-                    tx.send(()).expect("send over mpsc channel");
-                    Ok(())
-                }));
-            let mut token = 0;
+            let url = CoTaskMemPWSTR::from(url.as_str());
             unsafe {
-                webview.add_NavigationCompleted(&handler, &mut token)?;
-                let url = CoTaskMemPWSTR::from(url.as_str());
                 webview.Navigate(*url.as_ref().as_pcwstr())?;
-                let result = webview2_com::wait_with_pump(rx);
-                webview.remove_NavigationCompleted(token)?;
-                result?;
             }
         }
 
         if let Some(frame) = self.frame.as_ref() {
             let hwnd = *frame.window;
             unsafe {
-                let _ = WindowsAndMessaging::ShowWindow(hwnd, WindowsAndMessaging::SW_SHOW);
                 let _ = Gdi::UpdateWindow(hwnd);
                 let _ = KeyboardAndMouse::SetFocus(Some(hwnd));
             }
@@ -564,35 +554,6 @@ impl WebView {
             unsafe {
                 let _ =
                     WindowsAndMessaging::SetWindowTextW(*frame.window, *title.as_ref().as_pcwstr());
-            }
-        }
-        Ok(self)
-    }
-
-    pub fn set_size(&self, width: i32, height: i32) -> AppResult<&Self> {
-        if let Some(frame) = self.frame.as_ref() {
-            *frame.size.borrow_mut() = SIZE {
-                cx: width,
-                cy: height,
-            };
-            unsafe {
-                self.controller.0.SetBounds(RECT {
-                    left: 0,
-                    top: 0,
-                    right: width,
-                    bottom: height,
-                })?;
-                let _ = WindowsAndMessaging::SetWindowPos(
-                    *frame.window,
-                    None,
-                    0,
-                    0,
-                    width,
-                    height,
-                    WindowsAndMessaging::SWP_NOACTIVATE
-                        | WindowsAndMessaging::SWP_NOZORDER
-                        | WindowsAndMessaging::SWP_NOMOVE,
-                );
             }
         }
         Ok(self)

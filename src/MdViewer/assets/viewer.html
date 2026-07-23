@@ -290,20 +290,28 @@
     }
 
     async function renderMermaidDiagrams() {
-      await ensureMermaid();
-      const diagrams = Array.from(app.querySelectorAll('.mermaid'));
-      for (const [index, diagram] of diagrams.entries()) {
-        const source = diagram.textContent || '';
-        if (!source.trim()) {
-          continue;
-        }
+      try {
+        await ensureMermaid();
+        const diagrams = Array.from(app.querySelectorAll('.mermaid'));
+        for (const [index, diagram] of diagrams.entries()) {
+          const source = diagram.textContent || '';
+          if (!source.trim()) {
+            continue;
+          }
 
-        try {
-          await renderMermaidElement(diagram, source, index);
-        } catch (error) {
-          diagram.classList.add('mermaid-error');
-          diagram.innerHTML = `<strong>Mermaid 渲染失败</strong><pre>${escapeHtml(error && error.message ? error.message : error)}</pre>`;
+          try {
+            await renderMermaidElement(diagram, source, index);
+          } catch (error) {
+            diagram.classList.add('mermaid-error');
+            diagram.innerHTML = `<strong>Mermaid 渲染失败</strong><pre>${escapeHtml(error && error.message ? error.message : error)}</pre>`;
+          }
         }
+      } catch (error) {
+        app.querySelectorAll('.mermaid').forEach(diagram => {
+          diagram.classList.add('mermaid-error');
+          const source = diagram.textContent || '';
+          diagram.innerHTML = `<strong>Mermaid 暂不可用</strong><pre>${escapeHtml(source || (error && error.message ? error.message : error))}</pre>`;
+        });
       }
     }
 
