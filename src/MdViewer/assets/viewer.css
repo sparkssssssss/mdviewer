@@ -160,18 +160,17 @@ pre {
   background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 16px;
+  padding: 16px 16px 44px;
   overflow: auto;
   box-shadow: var(--shadow);
 }
 pre code { background: transparent; padding: 0; }
 
 .copy-code {
-  position: sticky;
-  top: 8px;
-  right: 8px;
-  float: right;
-  margin: -8px -8px 8px 12px;
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 1;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: color-mix(in srgb, var(--bg), var(--code-bg) 42%);
