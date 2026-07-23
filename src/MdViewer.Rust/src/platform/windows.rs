@@ -432,10 +432,25 @@ impl WebView {
     ) -> AppResult<Self> {
         let environment = {
             let (tx, rx) = mpsc::channel();
+            let user_data_dir = resolve_webview_user_data_dir();
+            let user_data = CoTaskMemPWSTR::from(user_data_dir.to_string_lossy().as_ref());
+            let options: ICoreWebView2EnvironmentOptions =
+                CoreWebView2EnvironmentOptions::default().into();
+            let browser_args = CoTaskMemPWSTR::from(
+                "--disable-background-networking --disable-features=msWebOOUI,msPdfOOUI",
+            );
+            unsafe {
+                options.SetAdditionalBrowserArguments(*browser_args.as_ref().as_pcwstr())?;
+            }
             CreateCoreWebView2EnvironmentCompletedHandler::wait_for_async_operation(
-                Box::new(|handler| unsafe {
-                    CreateCoreWebView2Environment(&handler)
-                        .map_err(webview2_com::Error::WindowsError)
+                Box::new(move |handler| unsafe {
+                    CreateCoreWebView2EnvironmentWithOptions(
+                        PCWSTR::null(),
+                        *user_data.as_ref().as_pcwstr(),
+                        &options,
+                        &handler,
+                    )
+                    .map_err(webview2_com::Error::WindowsError)
                 }),
                 Box::new(move |error_code, environment| {
                     error_code?;
@@ -990,6 +1005,16 @@ fn resolve_assets_dir() -> AppResult<PathBuf> {
     }
 
     Err(Error::Other("viewer assets not found".into()))
+}
+
+fn resolve_webview_user_data_dir() -> PathBuf {
+    let base = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| PathBuf::from("."));
+    let dir = base.join("MdViewerRust").join("WebView2");
+    let _ = fs::create_dir_all(&dir);
+    dir
 }
 
 fn extract_initial_file(args: &[String]) -> Option<PathBuf> {

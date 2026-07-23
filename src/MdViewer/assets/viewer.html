@@ -34,6 +34,7 @@
     let mermaidLoadPromise = null;
     let katexLoadPromise = null;
     let highlightLoadPromise = null;
+    let renderVersion = 0;
 
     const md = window.markdownit({
       html: false,
@@ -193,7 +194,24 @@
       await katexLoadPromise;
     }
 
+    function scheduleEnhancement(version, task) {
+      requestAnimationFrame(() => {
+        window.setTimeout(async () => {
+          if (version !== renderVersion) {
+            return;
+          }
+
+          try {
+            await task();
+          } catch {
+            // Progressive enhancements must not block the readable Markdown view.
+          }
+        }, 0);
+      });
+    }
+
     async function render(payload) {
+      const version = ++renderVersion;
       currentBasePath = payload.basePath || payload.BasePath || null;
       window.mdviewerFileBaseUrl = payload.fileBaseUrl || payload.FileBaseUrl || null;
       const source = payload.markdown || payload.Markdown || '';
@@ -203,24 +221,29 @@
         buildToc();
 
         if (hasCodeFence(source)) {
-          requestAnimationFrame(() => highlightCodeBlocks());
+          scheduleEnhancement(version, highlightCodeBlocks);
         }
 
         if (hasMath(source)) {
-          await ensureKatex();
-          window.renderMathInElement?.(app, {
-            delimiters: [
-              { left: '$$', right: '$$', display: true },
-              { left: '$', right: '$', display: false },
-              { left: '\\(', right: '\\)', display: false },
-              { left: '\\[', right: '\\]', display: true }
-            ],
-            throwOnError: false
+          scheduleEnhancement(version, async () => {
+            await ensureKatex();
+            if (version !== renderVersion) {
+              return;
+            }
+            window.renderMathInElement?.(app, {
+              delimiters: [
+                { left: '$$', right: '$$', display: true },
+                { left: '$', right: '$', display: false },
+                { left: '\\(', right: '\\)', display: false },
+                { left: '\\[', right: '\\]', display: true }
+              ],
+              throwOnError: false
+            });
           });
         }
 
         if (hasMermaid(source)) {
-          await renderMermaidDiagrams();
+          scheduleEnhancement(version, renderMermaidDiagrams);
         }
       } catch (error) {
         app.innerHTML = `<div class="error-box"><strong>Render failed</strong><pre>${escapeHtml(error && error.message ? error.message : error)}</pre></div>`;
