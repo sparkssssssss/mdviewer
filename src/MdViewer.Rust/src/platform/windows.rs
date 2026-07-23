@@ -23,7 +23,7 @@ use webview2_com::{
 use windows::{
     core::{Interface, HRESULT, PCWSTR, PWSTR},
     Win32::{
-        Foundation::{E_POINTER, HINSTANCE, HWND, LPARAM, LRESULT, RECT, SIZE, WPARAM},
+        Foundation::{E_POINTER, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, RECT, SIZE, WPARAM},
         Graphics::Gdi,
         System::{Com::*, LibraryLoader},
         UI::{
@@ -164,6 +164,7 @@ impl FrameWindow {
                 );
                 if let Ok(hwnd) = hwnd {
                     let _ = install_menu(hwnd);
+                    set_window_icon(hwnd);
                     Shell::DragAcceptFiles(hwnd, true);
                     let _ = WindowsAndMessaging::ShowWindow(
                         hwnd,
@@ -1005,6 +1006,59 @@ fn resolve_assets_dir() -> AppResult<PathBuf> {
     }
 
     Err(Error::Other("viewer assets not found".into()))
+}
+
+fn set_window_icon(hwnd: HWND) {
+    let icon_path = resolve_icon_path();
+    let icon = icon_path.and_then(|path| load_icon_from_file(&path).ok());
+    if let Some(icon) = icon {
+        unsafe {
+            let icon_lparam = LPARAM(icon.0 as isize);
+            let _ = WindowsAndMessaging::SendMessageW(
+                hwnd,
+                WindowsAndMessaging::WM_SETICON,
+                Some(WPARAM(WindowsAndMessaging::ICON_BIG as usize)),
+                Some(icon_lparam),
+            );
+            let _ = WindowsAndMessaging::SendMessageW(
+                hwnd,
+                WindowsAndMessaging::WM_SETICON,
+                Some(WPARAM(WindowsAndMessaging::ICON_SMALL as usize)),
+                Some(icon_lparam),
+            );
+        }
+    }
+}
+
+fn resolve_icon_path() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let exe_dir = exe.parent()?;
+    let candidate = exe_dir.join("app.ico");
+    if candidate.exists() {
+        return Some(candidate);
+    }
+
+    let fallback = PathBuf::from("src/MdViewer/app.ico");
+    if fallback.exists() {
+        return Some(fallback);
+    }
+
+    None
+}
+
+fn load_icon_from_file(path: &Path) -> AppResult<HANDLE> {
+    let wide = to_wide(path.to_string_lossy().as_ref());
+    unsafe {
+        let handle = WindowsAndMessaging::LoadImageW(
+            None,
+            PCWSTR(wide.as_ptr()),
+            WindowsAndMessaging::IMAGE_ICON,
+            0,
+            0,
+            WindowsAndMessaging::LR_LOADFROMFILE,
+        )?;
+        Ok(handle)
+    }
 }
 
 fn resolve_webview_user_data_dir() -> PathBuf {

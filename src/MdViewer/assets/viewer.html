@@ -14,9 +14,6 @@
     </aside>
     <main id="app" class="markdown-body"></main>
   </div>
-  <button id="open-file" class="open-file" type="button" title="打开 Markdown 文件" aria-label="打开 Markdown 文件">
-    打开
-  </button>
   <button id="edit-source" class="edit-source" type="button" title="编辑源 Markdown (Ctrl+E)" aria-label="编辑源 Markdown">
     <span aria-hidden="true">✎</span>
   </button>
@@ -26,7 +23,6 @@
   <script>
     const app = document.getElementById('app');
     const toc = document.getElementById('toc');
-    const openFileButton = document.getElementById('open-file');
     const editSourceButton = document.getElementById('edit-source');
     let currentBasePath = null;
     let headingObserver = null;
@@ -461,7 +457,6 @@
       }
     }
 
-    openFileButton.addEventListener('click', openFile);
     editSourceButton.addEventListener('click', editSource);
     document.addEventListener('keydown', event => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'e') {
